@@ -1,7 +1,10 @@
 {
     # Bind admin API to all interfaces so the backend container
     # (which lives on the same docker network) can POST routes here.
-    admin 0.0.0.0:2019
+    admin 0.0.0.0:2019 {
+        origins *
+        hostnames 0.0.0.0 caddy localhost
+    }
     auto_https off
 }
 
