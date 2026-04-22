@@ -99,7 +99,8 @@ export async function runDeployment(
         env: { 
           DOCKER_BUILDKIT: '1',
           MISE_BIN: '/usr/local/bin/mise',
-          PATH: `/usr/local/bin:${process.env.PATH}` 
+          PATH: `/usr/local/bin:${process.env.PATH}`,
+          BUILDKIT_HOST: 'docker-container://buildkit'
         } 
       },
     )
