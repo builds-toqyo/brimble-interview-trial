@@ -10,7 +10,20 @@ bus.setMaxListeners(0)
 export function emitLog(deploymentId: string, message: string): void {
   const line = message.trimEnd()
   if (!line) return
-  appendLog(deploymentId, line)
+  
+  // Only try to append to database if it's a real deployment ID
+  // System logs (like 'system') don't have corresponding deployment records
+  if (deploymentId && deploymentId !== 'system') {
+    try {
+      appendLog(deploymentId, line)
+    } catch (error) {
+      // Ignore foreign key errors for system logs
+      if ((error as any).code !== 'SQLITE_CONSTRAINT_FOREIGNKEY') {
+        console.error('Error appending log:', error)
+      }
+    }
+  }
+  
   bus.emit(`log:${deploymentId}`, line)
 }
 
