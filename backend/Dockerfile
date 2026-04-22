@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install mise globally (required by Railpack for tool management)
 RUN curl https://mise.jdx.dev/install.sh | sh \
-    && mv /root/.local/bin/mise /usr/local/bin/mise \
+    && cp /root/.local/bin/mise /usr/local/bin/mise \
     && chmod +x /usr/local/bin/mise
 
 # Install Railpack (https://railpack.com/). Provides the `railpack` binary

@@ -23,6 +23,7 @@ services:
       - CADDY_ADMIN_URL=http://caddy:2019
       - PUBLIC_INGRESS_URL=http://localhost
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - BUILDKIT_HOST=docker-container://buildkit
     # Expose `host.docker.internal` so the Caddy container can reach
     # deployed apps that publish ports to the host.
     extra_hosts:
