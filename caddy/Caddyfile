@@ -1,21 +1,21 @@
 {
-    admin localhost:2019
+    # Bind admin API to all interfaces so the backend container
+    # (which lives on the same docker network) can POST routes here.
+    admin 0.0.0.0:2019
     auto_https off
 }
 
 :80 {
-    handle_path /api/* {
+    # Deployment ingress — Caddy is a single point of entry for every
+    # app the pipeline runs. Routes under /apps/<id>/* are injected
+    # at runtime by the backend via the admin API; they match BEFORE
+    # this catch-all because they're prepended to srv0.routes[0].
+
+    handle /api/* {
         reverse_proxy backend:3001
     }
-    
-    handle_path /deployments/* {
-        reverse_proxy backend:3001
-    }
-    
+
     handle {
         reverse_proxy frontend:3000
     }
 }
-
-# Dynamic deployment routes will be added via Caddy API
-import /etc/caddy/sites/*
