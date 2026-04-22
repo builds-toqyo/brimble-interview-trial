@@ -13,10 +13,30 @@ export const DeploymentLogs = ({ id }: DeploymentLogsProps) => {
       const response = await fetch(`/api/deployments/${id}/logs`)
       if (response.ok) {
         const data = await response.json()
-        setLogs(data)
+        // Handle different response formats
+        if (Array.isArray(data)) {
+          setLogs(data)
+        } else if (data && Array.isArray(data.logs)) {
+          setLogs(data.logs)
+        } else if (data && typeof data === 'object') {
+          // If it's an object with a data property containing logs
+          if (Array.isArray(data.data)) {
+            setLogs(data.data)
+          } else {
+            // Convert object to string representation
+            setLogs([JSON.stringify(data, null, 2)])
+          }
+        } else {
+          // Handle string or other types
+          setLogs([String(data)])
+        }
+      } else {
+        console.error('Failed to fetch logs:', response.statusText)
+        setLogs(['Error: Failed to load logs'])
       }
     } catch (error) {
       console.error('Failed to fetch logs:', error)
+      setLogs(['Error: Network error'])
     }
   }, [id])
 
