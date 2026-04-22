@@ -195,7 +195,7 @@ async function deployContainerZeroDowntime(
 async function stopContainer(containerId: string): Promise<void> {
   try {
     const container = docker.getContainer(containerId)
-    await container.stop({ timeout: 5000 })
+    await container.stop({ t: 5 })
     await container.remove()
   } catch (err) {
     // Container might already be stopped/removed
