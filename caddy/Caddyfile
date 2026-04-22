@@ -1,0 +1,21 @@
+{
+    admin localhost:2019
+    auto_https off
+}
+
+:80 {
+    handle_path /api/* {
+        reverse_proxy backend:3001
+    }
+    
+    handle_path /deployments/* {
+        reverse_proxy backend:3001
+    }
+    
+    handle {
+        reverse_proxy frontend:3000
+    }
+}
+
+# Dynamic deployment routes will be added via Caddy API
+import /etc/caddy/sites/*
