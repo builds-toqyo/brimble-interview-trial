@@ -7,9 +7,12 @@ import {
   listDeployments,
   getDeployment,
   getLogs,
+  getDeploymentVersions,
+  getCurrentVersion,
+  getPreviousVersion,
 } from './db'
 import { bus } from './events'
-import { runDeployment } from './pipeline'
+import { runDeployment, rollbackDeployment } from './pipeline'
 
 const app = express()
 const port = Number(process.env.PORT) || 3001
@@ -90,6 +93,39 @@ app.get('/api/deployments/:id/logs', (req: Request, res: Response) => {
     bus.off(`status:${id}`, onStatus)
     res.end()
   })
+})
+
+app.get('/api/deployments/:id/versions', (req, res) => {
+  const d = getDeployment(req.params.id)
+  if (!d) return res.status(404).json({ error: 'not found' })
+  
+  const versions = getDeploymentVersions(req.params.id)
+  const current = getCurrentVersion(req.params.id)
+  const previous = getPreviousVersion(req.params.id)
+  
+  res.json({
+    versions,
+    current,
+    previous,
+    canRollback: !!previous
+  })
+})
+
+app.post('/api/deployments/:id/rollback', async (req, res) => {
+  const d = getDeployment(req.params.id)
+  if (!d) return res.status(404).json({ error: 'not found' })
+  
+  const previous = getPreviousVersion(req.params.id)
+  if (!previous) {
+    return res.status(400).json({ error: 'No previous version available for rollback' })
+  }
+  
+  try {
+    await rollbackDeployment(req.params.id)
+    res.json({ message: 'Rollback initiated', previousVersion: previous })
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message })
+  }
 })
 
 app.get('/api/health', (_req, res) => {
