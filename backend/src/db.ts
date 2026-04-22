@@ -183,7 +183,7 @@ export function updateDeploymentVersion(
   patch: Partial<
     Pick<
       DeploymentVersion,
-      'status' | 'container_id' | 'host_port'
+      'status' | 'container_id' | 'host_port' | 'git_commit'
     >
   >,
 ): void {
