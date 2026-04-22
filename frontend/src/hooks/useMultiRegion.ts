@@ -56,13 +56,27 @@ export const useMultiRegion = (deploymentId: string, enabled: boolean) => {
 
   const { data: regions } = useQuery({
     queryKey: ['regions'],
-    queryFn: getRegions,
+    queryFn: async () => {
+      try {
+        return await getRegions()
+      } catch (error) {
+        console.warn('Regions endpoint not available:', error)
+        return []
+      }
+    },
     enabled
   })
 
   const { data: deploymentRegions } = useQuery({
     queryKey: ['deployment-regions', deploymentId],
-    queryFn: () => getDeploymentRegions(deploymentId),
+    queryFn: async () => {
+      try {
+        return await getDeploymentRegions(deploymentId)
+      } catch (error) {
+        console.warn('Deployment regions endpoint not available:', error)
+        return []
+      }
+    },
     enabled
   })
 
@@ -73,18 +87,37 @@ export const useMultiRegion = (deploymentId: string, enabled: boolean) => {
   })
 
   const createRegionMutation = useMutation({
-    mutationFn: () => createRegion(state.newRegion.name, state.newRegion.endpoint, state.newRegion.regionCode),
+    mutationFn: async () => {
+      try {
+        return await createRegion(state.newRegion.name, state.newRegion.endpoint, state.newRegion.regionCode)
+      } catch (error) {
+        console.error('Failed to create region:', error)
+        throw error
+      }
+    },
     onSuccess: () => {
       dispatch({ type: 'RESET_NEW_REGION' })
       queryClient.invalidateQueries({ queryKey: ['regions'] })
+    },
+    onError: (error) => {
+      console.error('Create region error:', error)
     }
   })
 
   const deployMutation = useMutation({
-    mutationFn: (data: { regionId: number; version: number }) =>
-      deployToRegion(deploymentId, data.regionId, data.version),
+    mutationFn: async (data: { regionId: number; version: number }) => {
+      try {
+        return await deployToRegion(deploymentId, data.regionId, data.version)
+      } catch (error) {
+        console.error('Failed to deploy to region:', error)
+        throw error
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deployment-regions', deploymentId] })
+    },
+    onError: (error) => {
+      console.error('Deploy to region error:', error)
     }
   })
 

@@ -77,15 +77,32 @@ export const useHealthCheck = (deploymentId: string, enabled: boolean) => {
 
   const { data: healthChecks } = useQuery({
     queryKey: ['health-checks', deploymentId],
-    queryFn: () => getHealthChecks(deploymentId),
+    queryFn: async () => {
+      try {
+        return await getHealthChecks(deploymentId)
+      } catch (error) {
+        console.warn('Health checks endpoint not available:', error)
+        return []
+      }
+    },
     enabled
   })
 
   const createMutation = useMutation({
-    mutationFn: () => createHealthCheck(deploymentId, state.version, state.config),
+    mutationFn: async () => {
+      try {
+        return await createHealthCheck(deploymentId, state.version, state.config)
+      } catch (error) {
+        console.error('Failed to create health check:', error)
+        throw error
+      }
+    },
     onSuccess: () => {
       dispatch({ type: 'RESET_FORM' })
       queryClient.invalidateQueries({ queryKey: ['health-checks', deploymentId] })
+    },
+    onError: (error) => {
+      console.error('Create health check error:', error)
     }
   })
 

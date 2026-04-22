@@ -7,7 +7,7 @@ import {
   fetchVersions, 
   rollbackDeployment
 } from '../api/deployments'
-import { AdvancedFeaturesButton } from '../components/AdvancedFeaturesButton'
+import { WorkingAdvancedFeaturesButton } from '../components/WorkingAdvancedFeaturesButton'
 import { VersionHistoryModal } from '../components/VersionHistoryModal'
 import { DeploymentLogs } from '../components/DeploymentLogs'
 import { DeploymentListSkeleton } from '../components/SkeletonLoader'
@@ -313,7 +313,7 @@ const DeploymentCard = ({ deployment }: { deployment: Deployment }) => {
           )}
           
           <RollbackButton deploymentId={deployment.id} />
-          <AdvancedFeaturesButton deploymentId={deployment.id} />
+          <WorkingAdvancedFeaturesButton deploymentId={deployment.id} />
           <DeploymentLogs id={deployment.id} />
         </div>
       </div>

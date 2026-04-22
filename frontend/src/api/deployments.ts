@@ -155,7 +155,8 @@ export async function scheduleRollback(
 export async function getScheduledRollbacks(deploymentId: string): Promise<ScheduledRollback[]> {
   const r = await fetch(`/api/deployments/${deploymentId}/scheduled-rollbacks`)
   if (!r.ok) throw new Error('Failed to fetch scheduled rollbacks')
-  return r.json()
+  const response = await r.json()
+  return response.data || []
 }
 
 export async function createTrafficSplit(
@@ -203,7 +204,8 @@ export async function updateTrafficSplitWeights(
 export async function getRegions(): Promise<Region[]> {
   const r = await fetch('/api/regions')
   if (!r.ok) throw new Error('Failed to fetch regions')
-  return r.json()
+  const response = await r.json()
+  return response.data || []
 }
 
 export async function createRegion(
@@ -237,7 +239,8 @@ export async function deployToRegion(
 export async function getDeploymentRegions(deploymentId: string): Promise<DeploymentRegion[]> {
   const r = await fetch(`/api/deployments/${deploymentId}/regions`)
   if (!r.ok) throw new Error('Failed to fetch deployment regions')
-  return r.json()
+  const response = await r.json()
+  return response.data || []
 }
 
 export async function createHealthCheck(
@@ -263,7 +266,8 @@ export async function createHealthCheck(
 export async function getHealthChecks(deploymentId: string): Promise<HealthCheck[]> {
   const r = await fetch(`/api/deployments/${deploymentId}/health-checks`)
   if (!r.ok) throw new Error('Failed to fetch health checks')
-  return r.json()
+  const response = await r.json()
+  return response.data || []
 }
 
 export async function optimizeDatabase(): Promise<{ message: string }> {

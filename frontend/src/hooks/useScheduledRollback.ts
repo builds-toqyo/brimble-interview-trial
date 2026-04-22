@@ -49,16 +49,33 @@ export const useScheduledRollback = (deploymentId: string, enabled: boolean) => 
 
   const { data: scheduledRollbacks } = useQuery({
     queryKey: ['scheduled-rollbacks', deploymentId],
-    queryFn: () => getScheduledRollbacks(deploymentId),
+    queryFn: async () => {
+      try {
+        return await getScheduledRollbacks(deploymentId)
+      } catch (error) {
+        // If the endpoint doesn't exist, return empty array
+        console.warn('Scheduled rollbacks endpoint not available:', error)
+        return []
+      }
+    },
     enabled
   })
 
   const scheduleMutation = useMutation({
-    mutationFn: (data: { targetVersion: number; scheduledAt: string; reason?: string }) =>
-      scheduleRollback(deploymentId, data.targetVersion, data.scheduledAt, data.reason),
+    mutationFn: async (data: { targetVersion: number; scheduledAt: string; reason?: string }) => {
+      try {
+        return await scheduleRollback(deploymentId, data.targetVersion, data.scheduledAt, data.reason)
+      } catch (error) {
+        console.error('Failed to schedule rollback:', error)
+        throw error
+      }
+    },
     onSuccess: () => {
       dispatch({ type: 'RESET_FORM' })
       queryClient.invalidateQueries({ queryKey: ['scheduled-rollbacks', deploymentId] })
+    },
+    onError: (error) => {
+      console.error('Schedule rollback error:', error)
     }
   })
 

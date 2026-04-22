@@ -48,10 +48,20 @@ export const useTrafficSplit = (deploymentId: string, enabled: boolean) => {
   })
 
   const createMutation = useMutation({
-    mutationFn: () => createTrafficSplit(deploymentId, state.versionA, state.versionB, state.weightA),
+    mutationFn: async () => {
+      try {
+        return await createTrafficSplit(deploymentId, state.versionA, state.versionB, state.weightA)
+      } catch (error) {
+        console.error('Failed to create traffic split:', error)
+        throw error
+      }
+    },
     onSuccess: () => {
       dispatch({ type: 'RESET_FORM' })
       queryClient.invalidateQueries({ queryKey: ['traffic-splits', deploymentId] })
+    },
+    onError: (error) => {
+      console.error('Traffic split creation error:', error)
     }
   })
 
