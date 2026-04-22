@@ -63,7 +63,7 @@ export async function addDeploymentRoute(
     ],
   }
   // Prepend to routes array so path match wins over the catch-all.
-  await post('/config/apps/http/servers/srv0/routes/0', route)
+  await post('/config/apps/http/servers/srv0/routes/', route)
 }
 
 export async function removeDeploymentRoute(deploymentId: string): Promise<void> {

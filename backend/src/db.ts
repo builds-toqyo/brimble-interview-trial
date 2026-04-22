@@ -53,6 +53,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_logs_deployment ON deployment_logs(deployment_id, id);
 `)
 
+// Add host_port column if it doesn't exist (for existing databases)
+try {
+  db.exec('ALTER TABLE deployments ADD COLUMN host_port INTEGER')
+} catch (err: any) {
+  // Column already exists, ignore error
+  if (!err.message.includes('duplicate column name')) {
+    throw err
+  }
+}
+
 export function insertDeployment(row: {
   id: string
   git_url: string | null
