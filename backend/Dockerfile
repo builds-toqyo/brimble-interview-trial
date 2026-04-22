@@ -20,7 +20,7 @@ RUN apk add --no-cache git docker-cli curl bash ca-certificates tar
 
 # Install mise globally (required by Railpack for tool management)
 RUN curl https://mise.jdx.dev/install.sh | sh \
-    && cp /root/.local/bin/mise /usr/local/bin/mise \
+    && mv /root/.local/bin/mise /usr/local/bin/mise \
     && chmod +x /usr/local/bin/mise
 
 # Install Railpack (https://railpack.com/). Provides the `railpack` binary
@@ -31,8 +31,10 @@ RUN export PATH="$HOME/.local/bin:$PATH" \
     && export PATH="$HOME/.local/bin:$PATH" \
     && railpack --version
 
-# Ensure the railpack tmp directory is writable
-RUN mkdir -p /tmp/railpack && chmod -R 777 /tmp/railpack
+# Ensure the directory exists and symlink mise to where Railpack expects it
+RUN mkdir -p /usr/local/bin /tmp/railpack/mise \
+    && ln -s /usr/local/bin/mise /tmp/railpack/mise/mise-2026.3.17 \
+    && chmod -R 777 /tmp/railpack
 
 COPY --from=builder /app /app
 RUN mkdir -p /app/data /app/workspace

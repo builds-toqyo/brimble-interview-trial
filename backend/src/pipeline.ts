@@ -98,7 +98,8 @@ export async function runDeployment(
       { 
         env: { 
           DOCKER_BUILDKIT: '1',
-          PATH: `${process.env.PATH}:/usr/local/bin` 
+          MISE_BIN: '/usr/local/bin/mise',
+          PATH: `/usr/local/bin:${process.env.PATH}` 
         } 
       },
     )
