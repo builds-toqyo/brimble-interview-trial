@@ -2,6 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { Toaster } from 'sonner'
 import { useState, Component, type ErrorInfo, type ReactNode } from 'react'
 
 import appCss from '../styles.css?url'
@@ -92,6 +93,19 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             {children}
           </QueryClientProvider>
         </ErrorBoundary>
+        <Toaster
+          position="top-right"
+          expand={false}
+          richColors
+          closeButton
+          toastOptions={{
+            style: {
+              background: 'hsl(var(--background))',
+              border: '1px solid hsl(var(--border))',
+              color: 'hsl(var(--foreground))',
+            },
+          }}
+        />
         <TanStackDevtools
           config={{
             position: 'bottom-right',
