@@ -13,16 +13,36 @@
 const CADDY_ADMIN = process.env.CADDY_ADMIN_URL || 'http://caddy:2019'
 
 async function post(path: string, body: unknown): Promise<void> {
-  const res = await fetch(`${CADDY_ADMIN}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+  const url = new URL(path, CADDY_ADMIN)
+  const data = JSON.stringify(body)
+  
+  return new Promise((resolve, reject) => {
+    const req = require('http').request({
+      hostname: url.hostname,
+      port: url.port || 2019,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+        'Host': url.host,
+      },
+    }, (res: any) => {
+      let responseData = ''
+      res.on('data', (chunk: any) => responseData += chunk)
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve()
+        } else {
+          reject(new Error(`Caddy ${path} -> ${res.statusCode}: ${responseData}`))
+        }
+      })
+    })
+    
+    req.on('error', reject)
+    req.write(data)
+    req.end()
   })
-  if (!res.ok) {
-    throw new Error(
-      `Caddy ${path} -> ${res.status}: ${await res.text().catch(() => '')}`,
-    )
-  }
 }
 
 async function del(path: string): Promise<void> {
