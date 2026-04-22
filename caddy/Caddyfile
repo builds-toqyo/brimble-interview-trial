@@ -1,9 +1,7 @@
 {
     # Bind admin API to all interfaces so the backend container
     # (which lives on the same docker network) can POST routes here.
-    admin 0.0.0.0:2019 {
-        disable_admin_access
-    }
+    admin 0.0.0.0:2019
     auto_https off
 }
 
