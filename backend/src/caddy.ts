@@ -18,6 +18,7 @@ async function post(path: string, body: unknown): Promise<void> {
   
   return new Promise((resolve, reject) => {
     const req = require('http').request({
+      // url.hostname will be 'caddy'
       hostname: url.hostname,
       port: url.port || 2019,
       path: url.pathname + url.search,
@@ -25,7 +26,8 @@ async function post(path: string, body: unknown): Promise<void> {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(data),
-        'Host': url.host,
+        // Explicitly set Host to match the service name
+        'Host': url.hostname,
       },
     }, (res: any) => {
       let responseData = ''
@@ -39,7 +41,11 @@ async function post(path: string, body: unknown): Promise<void> {
       })
     })
     
-    req.on('error', reject)
+    // Improved error logging for DNS issues
+    req.on('error', (err: any) => {
+      reject(new Error(`Failed to connect to Caddy at ${CADDY_ADMIN}: ${err.message}`))
+    })
+    
     req.write(data)
     req.end()
   })
