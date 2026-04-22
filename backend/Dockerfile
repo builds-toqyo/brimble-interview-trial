@@ -18,10 +18,10 @@ ENV NODE_ENV=development
 #   bash     - railpack install script needs bash
 RUN apk add --no-cache git docker-cli curl bash ca-certificates tar
 
-# Install mise (required by Railpack for tool management)
-RUN curl -fsSL https://mise.run | sh \
-    && echo 'export PATH="$HOME/.local/bin:$PATH"' >> /etc/profile \
-    && export PATH="$HOME/.local/bin:$PATH"
+# Install mise globally (required by Railpack for tool management)
+RUN curl https://mise.jdx.dev/install.sh | sh \
+    && cp /root/.local/bin/mise /usr/local/bin/mise \
+    && chmod +x /usr/local/bin/mise
 
 # Install Railpack (https://railpack.com/). Provides the `railpack` binary
 # that shells out to docker buildx with the railpack BuildKit frontend.
@@ -30,6 +30,9 @@ RUN export PATH="$HOME/.local/bin:$PATH" \
     && curl -fsSL https://railpack.com/install.sh | bash -s -- -f \
     && export PATH="$HOME/.local/bin:$PATH" \
     && railpack --version
+
+# Ensure the railpack tmp directory is writable
+RUN mkdir -p /tmp/railpack && chmod -R 777 /tmp/railpack
 
 COPY --from=builder /app /app
 RUN mkdir -p /app/data /app/workspace

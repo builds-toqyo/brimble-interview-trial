@@ -90,11 +90,17 @@ export async function runDeployment(
     // 2. Build with Railpack. Railpack shells out to docker buildx using
     //    its BuildKit frontend — no handwritten Dockerfile involved.
     emitLog(deploymentId, `Building image with Railpack → ${imageTag}`)
+    
     const buildCode = await runStreamed(
       deploymentId,
       'railpack',
       ['build', '--name', imageTag, repoDir],
-      { env: { DOCKER_BUILDKIT: '1' } },
+      { 
+        env: { 
+          DOCKER_BUILDKIT: '1',
+          PATH: `${process.env.PATH}:/usr/local/bin` 
+        } 
+      },
     )
     if (buildCode !== 0) throw new Error(`railpack build exited ${buildCode}`)
     updateDeployment(deploymentId, { image_tag: imageTag })
