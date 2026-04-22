@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { DeploymentRepository } from '../repositories/deployment.repository'
 import { runDeployment, rollbackDeployment } from '../pipeline'
 import { emitLog } from '../events'
+import { extractProjectName, isValidGitHubUrl } from '../utils/github'
 import type {
   CreateDeploymentRequest,
   ApiResponse,
@@ -98,11 +99,22 @@ export class DeploymentController {
     }
     
     // Validate gitUrl format if provided
-    if (gitUrl && !gitUrl.startsWith('https://github.com/') && !gitUrl.startsWith('http://') && !gitUrl.startsWith('https://')) {
-      throw new ValidationError('Invalid git URL format')
+    if (gitUrl) {
+      if (!isValidGitHubUrl(gitUrl)) {
+        throw new ValidationError('Invalid GitHub URL format. Expected: https://github.com/owner/repo.git')
+      }
     }
     
-    return { gitUrl, projectName }
+    // Auto-extract project name from GitHub URL if not provided
+    let finalProjectName = projectName
+    if (!finalProjectName && gitUrl) {
+      finalProjectName = extractProjectName(gitUrl)
+    }
+    
+    return { 
+      gitUrl, 
+      projectName: finalProjectName || 'Unknown Project'
+    }
   }
 
   private validateIdParam(params: any): { id: string } {
