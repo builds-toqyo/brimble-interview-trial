@@ -1,22 +1,21 @@
-# ---- Builder stage ----
-FROM node:22-alpine AS builder
+FROM node:22-bullseye-slim AS builder
 WORKDIR /app
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm install
 COPY . .
 
-# ---- Runner stage ----
-FROM node:22-alpine AS runner
+FROM node:22-bullseye-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=development
 
-# Tools the pipeline needs at runtime:
-#   git      - to clone user repos
-#   docker   - CLI to talk to the docker.sock bind-mounted from host
-#   curl     - to fetch railpack binary & hit Caddy admin API
-#   bash     - railpack install script needs bash
-RUN apk add --no-cache git docker-cli curl bash ca-certificates tar
+RUN apt-get update && apt-get install -y \
+    git \
+    docker.io \
+    curl \
+    ca-certificates \
+    tar \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install mise globally (required by Railpack for tool management)
 RUN curl https://mise.jdx.dev/install.sh | sh \
@@ -31,8 +30,8 @@ RUN export PATH="$HOME/.local/bin:$PATH" \
     && export PATH="$HOME/.local/bin:$PATH" \
     && railpack --version
 
-# Ensure the directory exists and symlink mise to where Railpack expects it
-RUN mkdir -p /usr/local/bin /tmp/railpack/mise \
+# Setup the symlink trick for the specific version Railpack wants
+RUN mkdir -p /tmp/railpack/mise \
     && ln -s /usr/local/bin/mise /tmp/railpack/mise/mise-2026.3.17 \
     && chmod -R 777 /tmp/railpack
 
