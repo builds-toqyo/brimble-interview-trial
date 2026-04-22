@@ -11,8 +11,9 @@ import { AdvancedFeaturesButton } from '../components/AdvancedFeaturesButton'
 import { VersionHistoryModal } from '../components/VersionHistoryModal'
 import { DeploymentLogs } from '../components/DeploymentLogs'
 import { DeploymentListSkeleton } from '../components/SkeletonLoader'
+import { GitHubIcon } from '../components/GitHubIcon'
 import { appToast } from '../utils/toast'
-import { Github, ExternalLink, AlertCircle, CheckCircle, Clock, Zap } from 'lucide-react'
+import { ExternalLink, AlertCircle, CheckCircle, Clock, Zap } from 'lucide-react'
 
 // Custom hooks for better state management
 const useDeployForm = () => {
@@ -139,14 +140,14 @@ const DeployForm = () => {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <Github className="w-5 h-5 text-gray-600" />
+        <GitHubIcon className="w-5 h-5 text-gray-600" />
         <h3 className="text-lg font-semibold text-gray-900">New Deployment</h3>
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <div className="relative">
-            <Github className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <GitHubIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="url"
               placeholder="https://github.com/user/repo.git"
@@ -271,7 +272,7 @@ const DeploymentCard = ({ deployment }: { deployment: Deployment }) => {
             </h3>
             {deployment.git_url && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Github className="w-4 h-4" />
+                <GitHubIcon className="w-4 h-4" />
                 <span className="truncate max-w-xs">
                   {deployment.git_url.replace('https://github.com/', '').replace('.git', '')}
                 </span>
@@ -345,7 +346,7 @@ const DeploymentList = () => {
   )
   if (!data || !Array.isArray(data) || data.length === 0) return (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-      <Github className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+      <GitHubIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
       <h3 className="text-lg font-medium text-gray-900 mb-2">No deployments yet</h3>
       <p className="text-gray-600">Create your first deployment to get started</p>
     </div>
