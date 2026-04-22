@@ -10,6 +10,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    networks:
+      - brimble-net
 
   backend:
     build:
@@ -24,8 +26,6 @@ services:
       - PUBLIC_INGRESS_URL=http://localhost
       - DOCKER_HOST=unix:///var/run/docker.sock
       - BUILDKIT_HOST=docker-container://buildkit
-    # Expose `host.docker.internal` so the Caddy container can reach
-    # deployed apps that publish ports to the host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -36,20 +36,36 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - caddy
+      - buildkit
+    networks:
+      - brimble-net
+
+  buildkit:
+    image: moby/buildkit:latest
+    container_name: buildkit
+    privileged: true
+    networks:
+      - brimble-net
 
   caddy:
     image: caddy:2-alpine
     ports:
       - "80:80"
       - "443:443"
-      - "2019:2019" # admin API (handy for debugging)
+      - "2019:2019"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - brimble-net
     command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+
+networks:
+  brimble-net:
+    driver: bridge
 
 volumes:
   caddy_data:
