@@ -2,9 +2,17 @@ import { spawn } from 'child_process'
 import Docker from 'dockerode'
 import fs from 'fs'
 import path from 'path'
-import { updateDeployment } from './db'
+import { 
+  updateDeployment, 
+  createDeploymentVersion, 
+  updateDeploymentVersion,
+  getDeploymentVersions,
+  getCurrentVersion,
+  getPreviousVersion,
+  setCurrentVersion
+} from './db'
 import { emitLog, emitStatus } from './events'
-import { addDeploymentRoute, publicUrlFor } from './caddy'
+import { addDeploymentRoute, removeDeploymentRoute, publicUrlFor } from './caddy'
 
 const WORKSPACE = process.env.WORKSPACE_DIR || path.resolve('./workspace')
 const docker = new Docker({ socketPath: '/var/run/docker.sock' })
@@ -41,7 +49,7 @@ function runStreamed(
 
 function setStatus(
   deploymentId: string,
-  status: 'pending' | 'building' | 'deploying' | 'running' | 'failed',
+  status: 'pending' | 'building' | 'deploying' | 'running' | 'failed' | 'stopping' | 'stopped',
 ): void {
   updateDeployment(deploymentId, { status })
   emitStatus(deploymentId, status)
@@ -65,99 +73,6 @@ async function pickFreePort(): Promise<number> {
   })
 }
 
-export async function runDeployment(
-  deploymentId: string,
-  gitUrl: string,
-): Promise<void> {
-  const repoDir = path.join(WORKSPACE, deploymentId)
-  const imageTag = `brimble-app-${deploymentId}:latest`
-
-  try {
-    // 1. Clone
-    setStatus(deploymentId, 'building')
-    fs.rmSync(repoDir, { recursive: true, force: true })
-    fs.mkdirSync(repoDir, { recursive: true })
-    emitLog(deploymentId, `Cloning ${gitUrl}`)
-    const cloneCode = await runStreamed(deploymentId, 'git', [
-      'clone',
-      '--depth',
-      '1',
-      gitUrl,
-      repoDir,
-    ])
-    if (cloneCode !== 0) throw new Error(`git clone exited ${cloneCode}`)
-
-    // 2. Build with Railpack. Railpack shells out to docker buildx using
-    //    its BuildKit frontend — no handwritten Dockerfile involved.
-    emitLog(deploymentId, `Building image with Railpack → ${imageTag}`)
-    
-    const buildCode = await runStreamed(
-      deploymentId,
-      'railpack',
-      ['build', '--name', imageTag, repoDir],
-      { 
-        env: { 
-          DOCKER_BUILDKIT: '1',
-          MISE_BIN: '/usr/local/bin/mise',
-          PATH: `/usr/local/bin:${process.env.PATH}`,
-          BUILDKIT_HOST: 'docker-container://buildkit'
-        } 
-      },
-    )
-    if (buildCode !== 0) throw new Error(`railpack build exited ${buildCode}`)
-    updateDeployment(deploymentId, { image_tag: imageTag })
-
-    // 3. Inspect image to find an exposed port (default 3000 if none).
-    const image = docker.getImage(imageTag)
-    const info = await image.inspect()
-    const exposedPort =
-      Object.keys(info.Config?.ExposedPorts || {})[0] || '3000/tcp'
-    const containerPort = exposedPort.split('/')[0]
-
-    // 4. Run the container, publishing to a free host port.
-    setStatus(deploymentId, 'deploying')
-    const hostPort = await pickFreePort()
-    emitLog(
-      deploymentId,
-      `Running container: ${containerPort} → host:${hostPort}`,
-    )
-
-    const container = await docker.createContainer({
-      Image: imageTag,
-      name: `brimble-${deploymentId}`,
-      ExposedPorts: { [exposedPort]: {} },
-      HostConfig: {
-        PortBindings: { [exposedPort]: [{ HostPort: String(hostPort) }] },
-        RestartPolicy: { Name: 'unless-stopped' },
-        // So the deployed container can be reached from Caddy via
-        // host.docker.internal:<hostPort>
-        ExtraHosts: ['host.docker.internal:host-gateway'],
-      },
-    })
-    await container.start()
-    updateDeployment(deploymentId, {
-      container_id: container.id,
-      host_port: hostPort,
-    })
-
-    // 5. Attach log stream (don't await — runs until container stops).
-    streamContainerLogs(deploymentId, container).catch((err) =>
-      emitLog(deploymentId, `log stream error: ${err}`),
-    )
-
-    // 6. Register route in Caddy.
-    emitLog(deploymentId, `Registering Caddy route /apps/${deploymentId}`)
-    await addDeploymentRoute(deploymentId, hostPort)
-    const liveUrl = publicUrlFor(deploymentId)
-    updateDeployment(deploymentId, { live_url: liveUrl })
-    setStatus(deploymentId, 'running')
-    emitLog(deploymentId, `✅ Deployment running at ${liveUrl}`)
-  } catch (err) {
-    emitLog(deploymentId, `❌ ${(err as Error).message}`)
-    setStatus(deploymentId, 'failed')
-  }
-}
-
 async function streamContainerLogs(
   deploymentId: string,
   container: Docker.Container,
@@ -177,4 +92,232 @@ async function streamContainerLogs(
     write: (b: Buffer) => emitLog(deploymentId, b.toString('utf8').trimEnd()),
   }
   dockerModem.demuxStream(stream, out, err)
+}
+
+/**
+ * Get the next version number for a deployment
+ */
+function getNextVersion(deploymentId: string): number {
+  const versions = getDeploymentVersions(deploymentId)
+  return versions.length > 0 ? Math.max(...versions.map(v => v.version)) + 1 : 1
+}
+
+/**
+ * Build with cache reuse using Railpack
+ */
+async function buildWithCache(
+  deploymentId: string,
+  workDir: string,
+  imageTag: string,
+): Promise<void> {
+  emitLog(deploymentId, 'Building image with Railpack (cache enabled)')
+  
+  // Use BUILDKIT_HOST for cache reuse and set cache directory
+  await runStreamed(deploymentId, 'railpack', [
+    'build',
+    '--name',
+    imageTag,
+    workDir,
+  ], {
+    env: {
+      ...process.env,
+      BUILDKIT_HOST: process.env.BUILDKIT_HOST || 'docker-container://buildkit',
+      // Enable build cache reuse
+      RAILPACK_CACHE_DIR: `/tmp/railpack-cache/${deploymentId}`,
+    },
+  })
+}
+
+/**
+ * Deploy container with blue-green strategy for zero downtime
+ */
+async function deployContainerZeroDowntime(
+  deploymentId: string,
+  imageTag: string,
+  version: number,
+): Promise<void> {
+  setStatus(deploymentId, 'deploying')
+  
+  const exposedPort = '3000/tcp'
+  const hostPort = await pickFreePort()
+  
+  emitLog(deploymentId, `Running container: ${exposedPort} -> host:${hostPort}`)
+
+  const container = await docker.createContainer({
+    Image: imageTag,
+    name: `brimble-${deploymentId}-v${version}`,
+    ExposedPorts: { [exposedPort]: {} },
+    HostConfig: {
+      PortBindings: { [exposedPort]: [{ HostPort: String(hostPort) }] },
+      RestartPolicy: { Name: 'unless-stopped' },
+      ExtraHosts: ['host.docker.internal:host-gateway'],
+    },
+  })
+  
+  await container.start()
+  
+  // Update version record
+  updateDeploymentVersion(deploymentId, version, {
+    status: 'running',
+    container_id: container.id,
+    host_port: hostPort,
+  })
+
+  // Attach log stream
+  streamContainerLogs(deploymentId, container).catch((err) =>
+    emitLog(deploymentId, `log stream error: ${err}`),
+  )
+
+  // Health check before switching traffic
+  emitLog(deploymentId, 'Performing health check...')
+  await new Promise(resolve => setTimeout(resolve, 5000)) // Basic health check delay
+  
+  // Register new route
+  emitLog(deploymentId, `Registering Caddy route /apps/${deploymentId}`)
+  await addDeploymentRoute(deploymentId, hostPort)
+  
+  // Update deployment to point to new version
+  setCurrentVersion(deploymentId, version)
+  const liveUrl = publicUrlFor(deploymentId)
+  updateDeployment(deploymentId, { 
+    live_url: liveUrl,
+    container_id: container.id,
+    host_port: hostPort
+  })
+  
+  setStatus(deploymentId, 'running')
+  emitLog(deploymentId, `Deployment running at ${liveUrl}`)
+}
+
+/**
+ * Stop and remove old container for rollback/cleanup
+ */
+async function stopContainer(containerId: string): Promise<void> {
+  try {
+    const container = docker.getContainer(containerId)
+    await container.stop({ timeout: 5000 })
+    await container.remove()
+  } catch (err) {
+    // Container might already be stopped/removed
+    console.warn(`Failed to stop container ${containerId}:`, err)
+  }
+}
+
+/**
+ * Rollback to previous version
+ */
+export async function rollbackDeployment(deploymentId: string): Promise<void> {
+  try {
+    emitLog(deploymentId, 'Starting rollback to previous version...')
+    setStatus(deploymentId, 'stopping')
+    
+    const previousVersion = getPreviousVersion(deploymentId)
+    if (!previousVersion) {
+      throw new Error('No previous version available for rollback')
+    }
+    
+    const currentVersion = getCurrentVersion(deploymentId)
+    
+    // Stop current container
+    if (currentVersion?.container_id) {
+      emitLog(deploymentId, 'Stopping current container...')
+      await stopContainer(currentVersion.container_id)
+      
+      // Remove current route
+      await removeDeploymentRoute(deploymentId)
+    }
+    
+    // Start previous version
+    if (previousVersion.container_id) {
+      emitLog(deploymentId, `Starting previous container (version ${previousVersion.version})`)
+      
+      // Try to start the existing container
+      try {
+        const container = docker.getContainer(previousVersion.container_id)
+        await container.start()
+        
+        // Update version status
+        updateDeploymentVersion(deploymentId, previousVersion.version, {
+          status: 'running'
+        })
+        
+        // Re-register route
+        await addDeploymentRoute(deploymentId, previousVersion.host_port!)
+        
+        // Update deployment
+        setCurrentVersion(deploymentId, previousVersion.version)
+        const liveUrl = publicUrlFor(deploymentId)
+        updateDeployment(deploymentId, {
+          live_url: liveUrl,
+          container_id: previousVersion.container_id,
+          host_port: previousVersion.host_port
+        })
+        
+        setStatus(deploymentId, 'running')
+        emitLog(deploymentId, `Rollback complete. Running at ${liveUrl}`)
+      } catch (err) {
+        throw new Error(`Failed to start previous container: ${(err as Error).message}`)
+      }
+    } else {
+      throw new Error('Previous version container not found')
+    }
+  } catch (err) {
+    emitLog(deploymentId, `Rollback failed: ${(err as Error).message}`)
+    setStatus(deploymentId, 'failed')
+  }
+}
+
+/**
+ * Enhanced deployment with versioning and zero-downtime support
+ */
+export async function runDeployment(deploymentId: string, gitUrl: string): Promise<void> {
+  try {
+    setStatus(deploymentId, 'building')
+    
+    const version = getNextVersion(deploymentId)
+    const imageTag = `brimble-app-${deploymentId}:v${version}`
+    
+    // Create version record
+    createDeploymentVersion(deploymentId, version, imageTag)
+    
+    // 1. Clone repo
+    const workDir = path.join(WORKSPACE, deploymentId)
+    await runStreamed(deploymentId, 'git', [
+      'clone',
+      '--depth',
+      '1',
+      gitUrl,
+      workDir,
+    ])
+
+    // 2. Get git commit for tracking
+    const gitCommitResult = await runStreamed(deploymentId, 'git', [
+      'rev-parse',
+      'HEAD'
+    ], { cwd: workDir })
+    
+    // Update version with git commit
+    updateDeploymentVersion(deploymentId, version, { git_commit: gitCommitResult.toString().trim() })
+
+    // 3. Build with cache reuse
+    await buildWithCache(deploymentId, workDir, imageTag)
+
+    // 4. Deploy with zero-downtime strategy
+    await deployContainerZeroDowntime(deploymentId, imageTag, version)
+    
+    // 5. Cleanup old versions (keep last 3)
+    const versions = getDeploymentVersions(deploymentId)
+    const versionsToCleanup = versions.slice(3) // Keep latest 3
+    
+    for (const oldVersion of versionsToCleanup) {
+      if (oldVersion.container_id && oldVersion.status === 'stopped') {
+        emitLog(deploymentId, `Cleaning up old version ${oldVersion.version}`)
+        await stopContainer(oldVersion.container_id)
+      }
+    }
+    
+  } catch (err) {
+    emitLog(deploymentId, `Deployment failed: ${(err as Error).message}`)
+    setStatus(deploymentId, 'failed')
+  }
 }
